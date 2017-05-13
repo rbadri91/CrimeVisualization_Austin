@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+<title>Visualization Final Project</title>
+</head>
+
+<style> /* set the CSS */
+
+.line {
+  fill: none;
+  stroke: steelblue;
+  stroke-width: 2px;
+}
+
+.axisGreen line{
+	fill: none;
+  stroke: green;
+  shape-rendering: green;
+  shape-rendering: crispEdges;
+}
+
+.axisGreen path{
+  fill: none;
+  shape-rendering: crispEdges;
+}
+
+.y.axisGreen path{
+  stroke: green;
+}
+
+.axisGreen text{
+  fill: green;
+} 
+
+.axisRed line{
+  stroke: red;
+}
+
+.axisRed path{
+  stroke: red;
+}
+
+.axisRed text{
+  fill: red;
+} 
+
+.axis path,
+.axis line {
+  fill: red;
+  stroke: red;
+  shape-rendering: crispEdges;
+}
+
+.x.axis path {
+  display: none;
+}
+
+.node {
+	cursor: pointer;
+}
+
+.node:hover {
+	stroke: #000;
+	stroke-width: 1.5px;
+}
+
+.node--leaf {
+	fill: BurlyWood;
+}
+
+.label {
+	text-anchor: middle;
+}
+
+.label,
+.node--root {
+	pointer-events: none;
+}
+
+.node--leaf {
+	pointer-events: all;
+}
+
+.brush .extent {
+  stroke: #fff;
+  fill-opacity: .125;
+  shape-rendering: crispEdges;
+}
+</style>
+
+<body bgcolor="black" text="grey" onload="selectedOptions()">
+<h3 style="color:grey"> Council Map of Austin with Crime Rate </h3>
+Select Council(s) and Crime(s) to view visualizations. All visualizations support on-click and mouse hover.
+<div style="float:left" id="Councils">
+Council(s):
+<input type="checkbox" id="council1"i checked>Council 1 
+<input type="checkbox" id="council2" checked>Council 2 
+<input type="checkbox" id="council3" checked>Council 3 
+<input type="checkbox" id="council4" checked>Council 4 
+<input type="checkbox" id="council5" checked>Council 5 
+<input type="checkbox" id="council6" checked>Council 6 
+<input type="checkbox" id="council7" checked>Council 7 
+<input type="checkbox" id="council8" checked>Council 8 
+<input type="checkbox" id="council9" checked>Council 9 
+<input type="checkbox" id="council10" checked>Council 10 
+</div>
+<br />
+<div style="float:left" id="Crimes">
+Crime(s): 
+<input type="checkbox" id="crime1" checked>Murder 
+<input type="checkbox" id="crime2" checked>Rape 
+<input type="checkbox" id="crime3" checked>Agg Assault 
+<input type="checkbox" id="crime4" checked>Theft 
+<input type="checkbox" id="crime5" checked>Burglary 
+<input type="checkbox" id="crime6" checked>Robbery 
+<input type="checkbox" id="crime7" checked>Auto Theft 
+</div>
+<br>
+<div style="float:left; clear:both" id="Status">
+Clearance Status:
+<input type="checkbox" id="status1"i checked>Unsolved 
+<input type="checkbox" id="status2" checked>Solved 
+</div>
+<br><br>
+<div style="float:left; clear:both" id="Submit"></div>
+<br /><br />
+<div style="float:left" id="div1"></div>
+<div style="float:right" id="div2"></div>
+<div style="float:left" id="div3"></div>
+<div style="float:right" id="div4"></div>
+<div align="center" id="div5"></div>
+<script src="//d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script src="//d3js.org/d3.v4.js" charset="utf-8"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+<script>
+var width  = 630;
+var height = 500;
+
+var svg = d3.select("#div1").append("svg")
+	.attr("width", width)
+	.attr("height", height);
+
+var svg2 = d3.select("#div2").append("svg")
+	.attr("width", width)
+	.attr("height", height + 20);
+	
+var svg3 = d3.select("#div3").append("svg")
+	.attr("width", width)
+	.attr("height", height);
+
+var svg4 = d3.select("#div4").append("svg")
+	.attr("width", width)
+	.attr("height", height);	
+
+var svg5 = d3.select("#div5").append("svg")
+	.attr("width", width)
+	.attr("height", height);
+
+var lineChartBrush;	
+
+var isBrushEnabled = 0,
+	geojson,
+	// brush = d3.brush().on("end", brushended),
+	idleTimeout,
+	idleDelay = 350;
+
+var submitButton = d3.select("#Submit")
+	.append("button")
+	.text("Submit Selections")
+	.on("click", selectedOptions);
+
+var crimeURLarg = "", councilURLarg = "", councilSelected = [],
+	statusURLarg = "", statusSelected = [];
+
+// var brushButton = d3.select("#button")
+// 	.append("button")
+// 	.text("Click to select councils using brush")
+// 	.on("click", function () {
+// 		isBrushEnabled = (isBrushEnabled + 1) % 2;
+// 		console.log("Is Brush = " + isBrushEnabled);
+
+// 		if (isBrushEnabled) {
+// 			svg.append("g")
+// 				.attr("id", "brush")
+// 				.call(brush);
+// 			d3.select(this)
+// 				.text("Click to delete brush");
+// 		} else {
+// 			d3.select(this)
+// 				.text("Click to select councils using brush");
+// 			svg.selectAll("#brush")
+// 				.remove();
+// 		}
+// 	});
+
+function getCrimeList() {
+	var crimeType = ["Murder", "Rape", "Agg Assault", "Theft", "Burglary", "Robbery", "Auto Theft"],
+		first_arg = true	
+
+	for (var i = 1; i <= crimeType.length; i++) {
+		d3.selectAll("#crime" + (i))
+	  		.filter(function () {
+				return d3.select(this).property("checked") == true;
+			})
+			.property("checked", function () {
+				var arg = "";
+				
+				if (first_arg == true) {
+					crimeURLarg = "";
+					arg = "crime=";
+					first_arg = false;
+				} else {
+					arg = "&crime=";
+				}
+	  			crimeURLarg += arg + (crimeType[i-1]);
+			});
+	}
+}
+
+function getCouncilList() {
+	var councilSelection = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+		first_arg = true;
+	
+	for (var i = 1; i <= councilSelection.length; i++) {
+		d3.selectAll("#council" + (i))
+			.filter(function () {
+				return d3.select(this).property("checked") == true;
+			})
+			.property("checked", function () {
+				var arg = "";
+				
+				if (first_arg == true) {
+					councilURLarg = "";
+					councilSelected = [];
+
+					for (var j = 1; j <= councilSelection.length; j++) {
+						councilSelected.push(false);
+					}
+
+					arg = "council=";
+					first_arg = false;
+				} else {
+					arg = "&council=";
+				}
+				councilSelected[i-1] = true;
+				councilURLarg += arg + (councilSelection[i-1]);
+			});
+	}
+}
+
+function getStatusList() {
+	var statusType = [0, 1, 2],
+	first_arg = true	
+	for (var i = 1; i < statusType.length; i++) {
+		d3.selectAll("#status" + (i))
+			.filter(function () {
+					return d3.select(this).property("checked") == true;
+			})
+			.property("checked", function () {
+				var arg = "";
+
+				if (first_arg == true) {
+					statusSelected = [];
+
+					for (var j = 1; j < statusType.length; j++) {
+						statusSelected.push(0);
+					}
+
+					statusURLarg = "";
+					arg = "status=";
+					first_arg = false;
+				} else {
+					arg = "&status=";
+				}
+				
+				statusSelected[i-1] = 1;
+				statusURLarg += arg + (statusType[i-1]);
+				if (i == 2) {
+					statusURLarg += "&status=" + (statusType[i]);
+				}
+			});
+	}
+}
+
+function selectedOptions() {
+
+	var councilSelection = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+	getCrimeList();
+	getCouncilList();
+	getStatusList();
+	drawMapOnScreen(councilURLarg, crimeURLarg, statusURLarg);
+}
+
+function drawMapOnScreen(councilURL, crimeURL, statusURLarg) {
+	URL = "/data?" + councilURL +"&" + crimeURL + "&" + statusURLarg;
+
+	d3.queue()
+		.defer(d3.json, "static/lib/dataset/maps/Austin.geojson")
+		.defer(d3.json, URL)
+		.await(drawMap);
+}
+
+function councilIdxMapper(idx) {
+	var mapping = [4, 7, 2, 1, 9, 5, 6, 3, 8, 0];
+
+	return mapping[idx];
+}
+
+function calculatePercentage(count, total) {
+	return (count * 100) / total;
+}
+
+function drawMap(error, geojson, per_region_data) {
+	svg.remove();
+
+	console.log(per_region_data);
+	var noDisplay = true;
+	for (var i = 0; i < per_region_data.length; i++) {
+		if (per_region_data[i] != 0) {
+			noDisplay = false;
+			break;
+		}
+	}
+	
+	svg = d3.select("#div1").append("svg")
+		.attr("width", width)
+		.attr("height", height);
+
+	if (noDisplay) {
+		d3.select(svg.node().parentNode).style("float","none");
+		d3.select(svg.node().parentNode).attr("align","center");
+		svg.append("text")
+			.attr("x", width/4)             
+			.attr("y", height/2)
+			.style("fill", "grey")
+			.style("font-size", "30px")
+			.style("text-decoration", "underline")
+			.text("No Data to Display for this Selection!");
+		
+		svg.append("text")
+			.attr("x", width/4)             
+			.attr("y", (height/2)+40)
+			.style("fill", "grey")
+			.style("font-size", "30px")
+			.style("text-decoration", "underline")
+			.text("Please Choose a Different one");
+
+		
+		svg2.remove();
+		svg3.remove();
+		svg4.remove();
+		svg5.remove();
+		return;
+	}
+
+	d3.select(svg.node().parentNode).style("float","left");	
+	d3.select(svg.node().parentNode).style("align","none");		
+	/* For now, use a guess for the projection parameters */
+	var center = d3.geo.centroid(geojson),
+		scale  = 100,
+		offset = [width/2, height/2];
+	
+	var projection = d3.geo.mercator()
+		.scale(scale)
+		.center(center)
+		.translate(offset);
+
+	/* create the path variable based off initial parameters */
+	var path = d3.geo.path()
+		.projection(projection);
+
+	var max = per_region_data.splice(per_region_data.length - 1, 1)
+
+	var color_range = ["white"];
+
+	if (statusSelected[0] == 1) {
+		color_range.push("#8B0000");
+	} else {
+		color_range.push("#008000");
+	}
+
+	var color = d3.scale.linear()
+		.domain([0, calculatePercentage(d3.max(per_region_data), max)])
+		.range(color_range);
+
+	/* Use this path to determine the bounds of the current map and
+	 * then estimate better values for the scale and translation
+	 * that fit within these bounds
+	 */
+	var bounds  = path.bounds(geojson);
+	
+	var hori_scale  = scale * width  / (bounds[1][0] - bounds[0][0]),
+		vert_scale  = scale * height / (bounds[1][1] - bounds[0][1]);
+
+	/* Determine the newer projection parameters */
+	var scale   = (hori_scale < vert_scale) ? hori_scale : vert_scale;
+
+	var offset  = [width - (bounds[0][0] + bounds[1][0])/2,
+		height - (bounds[0][1] + bounds[1][1])/2 + 15];
+
+	/* Create the new projection and path */
+	projection = d3.geo.mercator()
+		.scale(scale)
+		.center(center)
+		.translate(offset);
+
+	path = path.projection(projection);
+
+	svg.append("rect")
+		.attr('width', width)
+		.attr('height', height)
+		.style('stroke', 'black')
+		.on("click", function () {
+			
+			lineChart(councilURLarg, crimeURLarg, statusURLarg);
+			barGraph(councilURLarg, crimeURLarg, statusURLarg);
+			bubbleChart(councilURLarg, crimeURLarg, statusURLarg);
+			circlePacking(councilURLarg, crimeURLarg);
+			
+			svg.selectAll("path")
+				.style("opacity", 1);
+		});
+
+	svg.selectAll("path")
+		.data(geojson.features)
+		.enter().append("path")
+		.attr("d", path)
+		.style("fill", function (d, i) {
+			return color(calculatePercentage(per_region_data[councilIdxMapper(i)],
+			max));
+		})
+		.style("stroke-width", "1")
+		.style("stroke", "black")
+		.on("mouseover", function (d, i) {
+			d3.select(this).style("fill", "orange");
+		})
+		.on("mouseout", function (d, i) {
+			d3.select(this).style("fill", color(calculatePercentage(per_region_data[councilIdxMapper(i)],
+			max)));
+		})
+		.on("click", function (d, i) {
+
+			var council = "council="+(councilIdxMapper(i)+1);
+
+			if (councilSelected[councilIdxMapper(i)] == true) { 
+				
+				lineChart(council, crimeURLarg , statusURLarg);
+
+				barGraph(council, crimeURLarg, statusURLarg);
+
+				bubbleChart(council, crimeURLarg, statusURLarg);
+				
+				circlePacking(council, crimeURLarg);
+
+				svg.selectAll("path")
+					.style("opacity", function (d, j) {
+						if (j == i) {
+							return "1";
+						} else {
+							return "0.5";
+						}
+				});
+			}
+		})
+		.attr("pointer-events", "end")
+		.append("svg:title")
+			.text(function (d, i) { return "Council District #" + (councilIdxMapper(i)+1) +
+				"\nCrime Rate: " + Math.ceil(calculatePercentage(per_region_data[councilIdxMapper(i)],
+				max)) + "%\nCount: " + per_region_data[councilIdxMapper(i)];
+			});
+
+	svg.append("text")
+       .attr("x", 0)             
+	   .attr("y", 20)
+	   .style("fill", "grey")
+	   .style("font-size", "16px")
+	   .style("text-decoration", "underline")
+	   .text("Council Map of Austin");
+	
+	svg.append("text")
+		.attr("x", width - 300)
+		.attr("y", 20)
+		.style("fill", "grey")
+		.style("font-size", "16px")
+		.style("text-decoration", "underline")
+		.text(function () {
+			if (statusSelected[0] == 1 && statusSelected[1] == 1) {
+				return "With Overall Crime Rate";
+			} else if (statusSelected[1] == 1) {
+				return "With Solved Crime Rate"
+			} else {
+				return "With Unsolved Crime Rate";
+			}
+		});
+
+	drawMapLegend(svg, 0, calculatePercentage(d3.max(per_region_data), max), color);
+
+	barGraph(councilURLarg, crimeURLarg, statusURLarg);
+
+	lineChart(councilURLarg, crimeURLarg , statusURLarg);
+	
+	bubbleChart(councilURLarg, crimeURLarg, statusURLarg);
+
+	circlePacking(councilURLarg, crimeURLarg);
+}
+
+function drawMapLegend(svg, min_value, max_value, color)
+{
+	var legend_keys = [],
+		int_val = (max_value - min_value) / 5,
+		legend_range = [];
+
+	for (i = min_value; i <= max_value; i += int_val) {
+		legend_keys.push(i);
+		legend_range.push(color(i));
+	}
+
+	var legend = svg.selectAll("g")
+		.data(legend_keys)
+		.enter().append("g")
+
+	var legend_wt = 20, legend_ht = 20;
+
+	legend.append("rect")
+		.attr("x", 0)
+		.attr("y", function (d, i) {
+			return (height - (legend_wt * (i + 2)));
+		})
+		.attr("width", legend_ht)
+		.attr("height", legend_ht)
+		.style("fill", function (d, i) {
+			return legend_range[i];
+		})
+	
+	 legend.append("text")
+	 	.attr("x", 30)
+	 	.attr("y", function(d, i) {
+			return height - ((i+1) * legend_ht) - 4;
+		})
+	  	.text(function(d, i) {
+			return Math.ceil(legend_keys[i]) + "%";
+		})
+		.style("fill", "grey");	
+}		
+
+// function brushended() {
+// 	var s = d3.event.selection;
+// 	if (!s) {
+// 		if (!idleTimeout) return idleTimeout = setTimeout(idled, idleDelay);
+// 	} else {
+// 		console.log("Highlighted Coordinates = " + s);
+// 		svg.selectAll("path")
+// 			.filter(function (d, i) {
+// 				//console.log("Data = " + path(d) + " Idx = " + i + " --- " + path(s));
+// 			});
+// 		svg.select(".brush").call(brush.move, null);
+// 	}
+// }
+
+function idled() {
+	idleTimeout = null; 
+}
+
+function barGraph(councilList, crimeList, statusList){
+
+	URL = councilList + "&" + crimeList+ "&" + statusList;
+
+	d3.queue()
+		.defer(d3.json, "/cases_solved_count?" + URL)
+		.await(drawBarGraph);	
+}
+
+function drawBarGraph(error,cases_solved_data) {
+
+	svg2.remove();
+
+	svg2 = d3.select("#div2").append("svg")
+	.attr("width", width)
+	.attr("height", height);
+	
+	var margin = {top: 20, right: 20, bottom: 30, left: 40},
+	g = svg2.append("g").attr("transform", "translate(" + margin.left + "," + 50 + ")");
+
+	var widthVal = svg.attr("width") - margin.left - margin.right,
+    heightVal = svg.attr("height") - margin.top - margin.bottom-20;
+
+    console.log("cases_solved_data val:",cases_solved_data);
+    if(cases_solved_data.length==0){
+    	svg2.append("text")
+		.attr("x", widthVal/4)             
+		.attr("y", heightVal/2)
+		.style("fill", "grey")
+		.style("font-size", "28px")
+		.style("text-decoration", "underline")
+		.text("No data to display bar chart");
+    }else{
+
+	    var keys=Object.keys(cases_solved_data[0]);
+
+	    console.log("keys :", keys);
+		var idx = keys.indexOf("crimeType")
+	    keys.splice(idx, 1);
+
+
+		var x0 = d3.scaleBand()
+	    .rangeRound([0, widthVal])
+	    .paddingInner(0.1);
+	    var x1 = d3.scaleBand()
+	    .padding(0.05);
+
+	    var y = d3.scaleLog()
+	    .rangeRound([heightVal, 0]);
+
+	    var colors=[];
+
+
+	    var color = d3.scaleOrdinal();
+
+	     var barGraphheaderText = svg2.append("text")
+									.attr("x", 100)             
+									.attr("y", 20)
+									.style("fill", "grey")
+									.style("font-size", "16px")
+									.style("text-decoration", "underline")
+									 
+
+	    if(document.getElementById("status1").checked && document.getElementById("status2").checked || (statusURLarg.indexOf(0) != -1 && statusURLarg.indexOf(1) != -1)){
+	    	colors[keys.indexOf("solved")]="green";
+	    	colors[keys.indexOf("unsolved")]="red";
+	    	color.range(colors);
+	    	barGraphheaderText.text("Bar Chart representing Solved and Unsolved Crimes");
+	    	// color.range(["red", "green"]);
+
+	    }else if(document.getElementById("status1").checked || statusURLarg.indexOf(0)!=-1){
+
+	    	var solvedIdx = keys.indexOf("solved")
+	    	keys.splice(solvedIdx, 1);
+	    	color.range(["red"]);
+	    	barGraphheaderText.text("Bar Chart representing Unsolved Crimes");
+
+	    }else if(document.getElementById("status2").checked || statusURLarg.indexOf(1)!=-1){
+
+	    	var unsolvedIdx = keys.indexOf("unsolved")
+	    	keys.splice(unsolvedIdx, 1);
+	    	color.range(["green"]);
+	    	barGraphheaderText.text("Bar Chart representing Solved Crimes");
+	    }
+	    
+
+	    
+		x0.domain(cases_solved_data.map(function(d) { return d.crimeType; }));
+	    x1.domain(keys).rangeRound([0, x0.bandwidth()]);
+	    y.domain([0.5, d3.max(cases_solved_data, function(d) {return d3.max(keys, function(key) {return d[key]; }); })]).nice();
+
+	    var bar= g.append("g")
+	    .selectAll("g")
+	    .data(cases_solved_data)
+	    .enter().append("g")
+	    .attr("transform", function(d) { return "translate(" + x0(d.crimeType) + ",0)"; })
+	    .selectAll("rect")
+	    .data(function(d) { return keys.map(function(key) { return {key: key, value: d[key]}; });})
+	    .enter()
+	    .append("rect")
+		.attr("x", function(d) { return x1(d.key); })
+	    .attr("y", function(d) {
+	    	if(y(d.value) !== Infinity) 
+	    		return y(d.value);
+	    	else
+	    		return "";	 
+	    })
+	    .attr("width", x1.bandwidth())
+	    .attr("height", function(d) {
+	    	if(y(d.value) !== Infinity) 
+	    		return heightVal - y(d.value)
+	    	else
+	    		return 0;
+	    })
+	    .attr("fill", function(d) { return color(d.key); })
+	    .on("mouseover", function (d, i) {
+				d3.select(this).style("fill", "orange");
+		})
+		.on("mouseout", function (d, i) {
+				d3.select(this).style("fill",function(d) { return color(d.key); })
+		})
+
+	    bar.append("svg:title")
+			.text(function (d, i) {
+
+					var obj = cases_solved_data.filter(function ( obj ) {
+					    return obj.solved === d.value ||obj.unsolved === d.value ;
+					})[0];
+
+					return "Crime Type :"+obj.crimeType+" \nType : " + d.key
+					+ " \nCount : " + d.value;
+			});
+
+	    bar.exit()
+	    .selectAll("rect")
+	    .attr("height", 0)
+	    .remove();  
+
+	    g.append("g")
+	      .attr("class", "axisRed")
+	      .style("font-size", "12px")
+	      .attr("transform", "translate(" + 0 + "," + parseInt(heightVal)+ ")")
+	      .call(d3.axisBottom(x0))
+	      .append("text")
+	      .attr("transform", "rotate(-90)")
+	      .style("font-size", "12px")
+	      .attr("x", 50)
+	      .attr("y", widthVal+10)
+	      .style("text-anchor", "end")
+	      .text("Crime Type");
+
+	    g.append("g")
+	      .attr("class", "axisRed")
+	      .style("font-size", "12px")
+	      .attr("transform", "translate(" + 0 + "," + 0+ ")")
+	      .call(d3.axisLeft(y).ticks(null, ".0s"))
+	    .append("text")
+	      .attr("x", 30)
+	      .attr("y", y(y.ticks().pop()) -10)
+	      .attr("dy", "0.32em")
+	      .style("font-size", "12px")
+	      .attr("fill", "#000")
+	      .attr("font-weight", "bold")
+	      .attr("text-anchor", "end")
+	      .text("Count");
+
+	      drawGroupedBarGraphLegend(keys,g,color,widthVal); 
+	   
+	}		
+
+}
+
+function drawGroupedBarGraphLegend(keys,g,color,widthVal){
+	 var legend = g.append("g")
+      .attr("font-family", "sans-serif")
+      .attr("font-size", 10)
+      .attr("text-anchor", "end")
+      .selectAll("g")
+      .data(keys.slice().reverse())
+      .enter().append("g")
+      .attr("transform", function(d, i) { return "translate(0," + i * 20 + ")"; });
+
+  legend.append("rect")
+      .attr("x", widthVal - 19)
+      .attr("width", 19)
+      .attr("height", 19)
+      .attr("fill", color);
+
+  legend.append("text")
+      .attr("x", widthVal - 24)
+      .attr("y", 9.5)
+      .attr("dy", "0.32em")
+      .style("font-size", "16px")
+      .text(function(d) { return d; })
+      .style("fill", "grey");
+}
+
+function bubbleChart(councilURL, crimeURL, statusURLarg) {
+	var URL = "/bubble_data?" + councilURL + "&" + crimeURL + "&" + statusURLarg;
+
+    d3.queue()
+		.defer(d3.json, URL)
+		.await(drawBubbleChart);
+}
+
+function drawBubbleChart(error, data) {
+	svg3.remove();
+	
+	svg3 = d3.select("#div3").append("svg")
+		.attr("width", width)
+		.attr("height", height);
+
+	if (data.length == 0) {
+		return;
+	}
+
+	var color = d3.scaleOrdinal(d3.schemeCategory20c);
+
+	var bubble = d3.layout.pack()
+		.size([width, height])
+		.value(function(d) { return d.Size; })
+		.padding(2);
+	
+	svg3.append("rect")
+		.attr('width', width)
+		.attr('height', height)
+		.style('stroke', 'black')
+		.on("click", function () {
+			svg3.selectAll("circle")
+			.style("opacity", 1);
+		});
+
+	var nodes = bubble.nodes(bubPrepareData(data))
+		.filter(function (d) { return !d.children; });
+	
+	var circle = svg3.selectAll("circle")
+		.data(nodes)
+		.enter()
+		.append("circle")
+		.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; })
+		.attr('r', function(d) { return d.r; })
+		.attr('fill', function(d, i) { return color(d.Council); })
+		.on("click", function (d, i) {
+			svg3.selectAll("circle")
+				.style("opacity", function (k, j) {
+					if (k.Council == d.Council) {
+						return "1";
+					} else {
+						return "0.5";
+					}
+				});
+		})
+		.append("svg:title")
+			.text(function (d, i) {
+				return "Council: " + d.Council + " Location Zip: " + d.Locations + " Crimes: " + d.Size;
+			});
+
+	var legendData = []
+	nodes.forEach(function (d) {
+		if (legendData.indexOf(d.Council) == -1) {
+			legendData.push(d.Council);
+		}
+	});
+
+	legendData.sort(function(a, b) {
+		return d3.ascending(a, b);
+	});
+
+	drawBubbleLegend(svg3, legendData, color);
+	
+	svg3.append("text")
+		.attr("x", 0)             
+		.attr("y", 50)
+		.style("fill", "grey")
+		.style("font-size", "16px")
+		.style("text-decoration", "underline")
+		.text("Bubble Chart of Crime Location Zips");
+	 
+	svg3.append("text")
+		.attr("x", width - 200)
+		.attr("y", 50)
+		.style("fill", "grey")
+		.style("font-size", "16px")
+		.style("text-decoration", "underline")
+		.text("within each Council");
+}
+
+function bubPrepareData(data) {
+	var processedData = []
+	var i = 0
+
+	for (var item in data) {
+		processedData.push({
+			Locations: data[item]["GO Location Zip"],
+			Council: data[item]["Council District"],
+			Size: data[item]["total"]
+		});
+
+		i = i + 1;
+	}
+	return {children : processedData};
+}
+
+function drawBubbleLegend(svg3, legendData, color) {
+	var legend = svg3.selectAll("g")
+		.data(legendData)
+		.enter().append("g")
+
+		var legend_wt = 20, legend_ht = 20;
+
+	legend.append("rect")
+		.attr("x", 0)
+		.attr("y", function (d, i) { return (height - (legend_wt * (i + 2))); })
+		.attr("width", legend_ht)
+		.attr("height", legend_ht)
+		.style("fill", function (d, i) { return color(d); })
+		.style("stroke", "black")
+		.style("stroke-width", "1")
+
+	legend.append("text")
+		.attr("x", 30)
+		.attr("y", function(d, i) { return height - ((i+1) * legend_ht) - 4; })
+		.text(function(d, i) { return "Council " + d; })
+		.style("fill", "grey");	
+}
+
+function lineChart(councilList, crimeList , statusURLarg){
+
+	URL = councilList + "&" + crimeList + "&" + statusURLarg;
+
+	console.log("URL here line chart:",URL);
+
+	d3.queue()
+		.defer(d3.json, "/line_chart_data?" + URL)
+		.await(drawLineChart);
+}
+
+function drawLineChart(error, data){
+
+	svg4.remove();
+
+	svg4 = d3.select("#div4").append("svg")
+		.attr("width", width)
+		.attr("height", height);
+
+	svg4.append("rect")
+		.attr('width', width)
+		.attr('height', height)
+		.style('stroke', 'black')
+		.on("click", function () {
+			svg4.selectAll("path")
+			.style("opacity", 1);
+			svg4.selectAll("circle")
+				.style("opacity",1);
+		});	
+
+	var   margin = {top: 20, right: 20, bottom: 30, left: 110}
+		widthVal= svg4.attr("width") - margin.left - margin.right,
+		heightVal= svg4.attr("height") - margin.top - margin.bottom,
+		g = svg4.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");	
+
+	if(data.length==0){
+    	svg4.append("text")
+		.attr("x", widthVal/4)             
+		.attr("y", heightVal/2)
+		.style("fill", "grey")
+		.style("font-size", "28px")
+		.style("text-decoration", "underline")
+		.text("No data to display Line Chart");
+    }else{	
+
+    		var LineChartHeadingText = svg4.append("text")
+							.attr("x", 40)             
+							.attr("y", 12)
+							.style("fill", "grey")
+							.style("font-size", "16px")
+							.style("text-decoration", "underline");	
+
+			
+    		if(document.getElementById("status1").checked && document.getElementById("status2").checked || (statusURLarg.indexOf(0) != -1 && statusURLarg.indexOf(1) != -1)){
+	    	LineChartHeadingText.text("Line Chart showing number of (solved/unsolved) crimes Reported across various months");
+
+		    }else if(document.getElementById("status1").checked || statusURLarg.indexOf(0)!=-1){
+
+		    	LineChartHeadingText.text("Line Chart showing number of unsolved crimes Reported across various months");
+
+		    }else if(document.getElementById("status2").checked || statusURLarg.indexOf(1)!=-1){
+
+		    	LineChartHeadingText.text("Line Chart showing number of solved crimes Reported across various months");
+		    }
+
+
+			var x = d3.scaleBand()
+		    .rangeRound([0, widthVal]);
+
+
+		    var y = d3.scaleLog()
+		    .rangeRound([heightVal, 0]);
+
+		    var color = d3.scale.category10();
+
+		  	var keys=d3.keys(data[0]);
+			var indexVal=keys.indexOf("month");
+			keys.splice(indexVal , 1);
+
+			color.domain(d3.keys(data[0]).filter(function(key) { return key !== "month"; }));
+			 		
+
+		    var line = d3.line()
+		    	.x(function(d) {return x(d.month);})
+		    	.y(function(d) {
+		    		console.log("d here:",d);
+		    		if(y(d.count) != Infinity){
+		    			return y(d.count);
+		    		}
+		    		return heightVal;
+		    	});
+
+		    var crimes = color.domain().map(function(name) {
+			    return {
+			      name: name,
+			      values: data.map(function(d) {
+			        return {month: d.month, count: +d[name]};
+			      })
+			    };
+			  });
+
+			x.domain(data.map(function(d) {return d.month;}));	
+
+			y.domain([0.5,
+			    d3.max(crimes, function(c) { return d3.max(c.values , function(v) { return v.count; }); })
+			]);
+
+			// var brush = d3.brushX()
+			//     .extent([[0, 0], [width, heightVal]])
+			//     // .x(x)
+			//     .on("brush", function(){
+			//     	console.log("it comes here");
+			//     	brushmove(brush);
+			//     })
+			//     .on("brush end", function(){
+			//     	console.log("it comes here brush end");
+			//     	brushend(x,brush,svg4,widthVal , initialDomainX , crimes , line );
+			//     });
+			// svg4.append("g")
+			//   	.attr("class", "brush")
+			//   	.call(brush)
+			//   	.selectAll('rect')
+			//     .attr('height', height);    
+
+
+
+			svg4.append("g")
+		      .attr("class", "axisGreen")
+		      .attr("transform", "translate(12 ," + parseInt(heightVal + parseInt(margin.top)) + ")")
+		      .call(d3.axisBottom(x));	
+
+		    svg4.append("g")
+			    .attr("class", "y axisGreen")
+			    .attr("transform", "translate(35," + margin.top + ")")
+			    .call(d3.axisLeft(y).ticks(null, ".0s"))
+		      .append("text")
+		        .attr("transform", "rotate(-90)")
+		        .attr("y", 6)
+		        .attr("dy", ".71em")
+		        .attr("fill", "red")
+		        .style("text-anchor", "end")
+		        .text("Count"); 
+		    
+
+		    var crimeType = svg4.selectAll(".crimes")
+		      .data(crimes)
+		    .enter().append("g")
+		      .attr("class", "crimes")
+		      .attr("transform", "translate(35," + margin.top + ")");
+
+		    var initialDomainX = d3.extent(data, d => d.month); 
+
+		    console.log("initialDomainX:",initialDomainX) 
+
+		    crimeType.append("path")
+		      .attr("class", "line")
+		      .attr("d", function(d) {
+		      	return line(d.values); })
+		      .style("stroke", function(d) {return color(d.name); })
+		      .style("stroke-width","3px")
+		      .on("mouseover", function (d, i) {
+					d3.select(this).style("stroke", "orange");
+				})
+			  .on("mouseout", function (d, i) {
+						d3.select(this).style("stroke",function(d) { return color(d.name); })
+			    })
+		      .on("click", function (d, i) {
+					svg4.selectAll("path")
+						.style("opacity", function (j,k) {
+							if (j && j.name == d.name) {
+								var parentVal=d3.select(this).node().parentNode;
+								d3.select(parentVal).selectAll("circle")
+								.style("opacity",1);
+								return "1";
+							} else {
+								var parentVal=d3.select(this).node().parentNode;
+								d3.select(parentVal).selectAll("circle")
+								.style("opacity",0.2);
+								return "0.2";
+							}
+						});
+				});
+
+		  		 var circles= crimeType.selectAll("circle")
+				    .data(function(d){return d.values})
+				    .enter()
+				    .append("circle")
+				    .attr("r", 4)
+				    .attr("cx", function(d,i) {return x(d.month); })
+				    .attr("cy", function(d,i) { 
+				    	if(y(d.count) !== Infinity)
+				    		return y(d.count); 
+				    	else
+				    		return heightVal;
+				    })
+				    .style("fill", function(d,i,j) {
+				    	var crimeType =findCrimeType(data,d);
+				    	return color(crimeType); 
+				    })
+				    .append("svg:title")
+						.text(function (d, i) {
+							
+							var crimeType=findCrimeType(data, d); 
+
+								return "CrimeType : "+ crimeType +"\nMonth : "+ d.month
+								+ " \nCount : " + d.count;
+					});
+
+				    lineChartBrush = d3.brush()
+						.extent([[0, 0], [width, heightVal]])
+						.on("brush", brushmove)
+						.on("brush end", function(){
+						    brushend(x, circles , crimes);
+						});	
+
+				svg4.append("g")
+				    .attr("class", "brush")
+				    .call(lineChartBrush)
+				    .selectAll('rect')
+				    .attr('height', heightVal);	    	
+
+
+			    drawLineChartLegend(keys,g,color,widthVal); 
+		
+	}	
+
+}
+
+// function brushmove(brush) {
+//   const extent = brush.extent();
+//   timeEls.map((el, idx) => el.innerText = extent[idx]);
+// }
+
+// function brushend(x,brush,svg,width , initialDomainX,crimes , line){
+// 	x.domain(brush.extent());
+
+// 	if (d3.select(".clear-button").empty()) {
+// 	    clearButton = svg.append('text')
+// 	      .attr("y", 250)
+// 	      .attr("x", width)
+// 	      .attr("class", "clear-button")
+// 	      .style("fill", "grey")
+// 	      .text("Clear Brush");
+// 	}
+
+// 	clearButton.on('click', function(){
+// 		clearBrush(x,initialDomainX,crimes,this , brush , line);
+// 	});
+// }
+
+// function clearBrush(x, initialDomainX , values, clearButton , line) {
+//   x.domain(initialDomainX);
+//   transitionData(values , line);
+// 	clearBrushSelection(brush);
+//   clearButton.remove();
+//   Array.from(document.querySelectorAll('.time')).map(el => el.innerText = '');
+// }
+
+// function transitionData(values, line) {
+// 	console.log("values in transition data:",values);
+//   svg4.selectAll(".line")
+//     .data(values)
+//   .transition()
+//     .duration(500)
+//     .attr("d", function(d) {
+//     	console.log("d here:",d.values); 
+//     	line(d.values)
+//     });
+// }
+
+// function clearBrushSelection(brush) {
+//   d3.select(".brush").call(brush.clear());
+// }
+
+
+function brushmove() {
+	console.log("brush here:",lineChartBrush);
+	var points  = svg4.selectAll("circles")
+  var extent = lineChartBrush.extent();
+  points.classed("selected", function(d) {
+    is_brushed = extent[0] <= d.index && d.index <= extent[1];
+    return is_brushed;
+  });
+}
+
+function brushend(x , points , data) {
+	console.log("brush here:",lineChartBrush);
+  get_button = d3.select(".clear-button");
+  if(get_button.empty() === true) {
+    clear_button = svg4.append('text')
+      .attr("y", 460)
+      .attr("x", 825)
+      .attr("class", "clear-button")
+      .text("Clear Brush");
+  }
+  console.log("brush.extent() here:",lineChartBrush.extent());
+   x.domain(lineChartBrush.extent());
+   transition_data(data);
+   reset_axis(x);
+
+   points.classed("selected", false);
+   d3.select(".brush").call(lineChartBrush.clear());
+
+   clear_button.on('click', function(){
+	    x.domain([0, 50]);
+	    transition_data(data);
+	    reset_axis(x);
+	    clear_button.remove();
+    });
+}  
+
+function transition_data(data) {
+  svg4.selectAll(".point")
+    .data(data.map(function(d) { return d.values; }))
+  .transition()
+    .duration(500)
+    .attr("cx", function(d) { return x(d.month); });
+}
+
+function reset_axis(x) {
+  svg4.transition().duration(500)
+   .select(".axisGreen")
+   .call(d3.axisBottom(x));
+}
+
+
+function findCrimeType(crimeDictionary,dataObj){
+	var crimetype;
+	crimeDictionary.forEach(function(obj){
+						var keys = Object.keys(obj).filter(function(key){
+									return obj[key] === dataObj.count;
+						})[0];
+						if(obj.month === dataObj.month && keys) crimeType = keys; 
+	});
+	return crimeType;
+}
+
+function drawLineChartLegend(keys,g,color,widthVal){
+
+	var legend = g.append("g")
+      .attr("font-family", "sans-serif")
+      .attr("font-size", 10)
+      .attr("text-anchor", "end")
+      .selectAll("g")
+      .data(keys.slice().reverse())
+      .enter().append("g")
+      .attr("transform", function(d, i) { return "translate(0," + i * 20 + ")"; });
+
+	legend.append("rect")
+	      .attr("x", widthVal - 19)
+	      .attr("width", 19)
+	      .attr("height", 19)
+	      .attr("fill", color);
+
+	legend.append("text")
+	      .attr("x", widthVal - 24)
+	      .attr("y", 9.5)
+	      .attr("dy", "0.32em")
+	      .style("font-size", "16px")
+	      .text(function(d) { return d; })
+	      .style("fill", "grey");
+
+}
+
+function LineChartSesonalButtons(g,widthVal){
+
+}
+
+function circlePacking(councilURL, crimeURL) {
+	var URL = "/cpack_data?" + councilURL + "&" + crimeURL;
+
+	d3.queue()
+		.defer(d3.json, URL)
+		.await(drawCirclePacking);
+
+}
+
+function drawCirclePacking(error, data) {
+	svg5.remove();
+
+	if (statusSelected[1] == 0) {
+		return;
+	}
+	
+	var councilURL = "";
+
+	for (var i = 1; i <= 10; i++) {
+		if (i == 1) {
+			councilURL = "council=" + i;
+		} else {
+			councilURL += "&council=" + i;
+		}
+	}
+
+	var URL = "/tot_crime_data?" + councilURL +"&" + crimeURLarg +
+		"&status=0&status=1&status=2";
+
+	d3.queue()
+		.defer(d3.json, URL)
+		.await(setTotalCrime);
+	
+	function setTotalCrime(error, crime_counts) {
+		var height = 600;
+		svg5 = d3.select("#div5").append("svg")
+			.attr("width", width)
+			.attr("height", height);
+
+		var diameter = d3.min([width, height]);
+
+		var g = svg5.append("g").attr("transform", "translate(" +
+				diameter / 2 + "," + diameter / 2 + ")");
+
+		var color = d3.scaleSequential(d3.interpolateMagma)
+			.domain([-1, 4]);
+
+		var pack = d3.pack()
+			.size([diameter, diameter])
+			.padding(2);
+
+		var root = d3.hierarchy(data)
+			.sum(function(d) { return d.total; })
+			.sort(function(a, b) { return b.value - a.value; });
+
+		var current_focus = root,
+			nodes = pack(root).descendants(),
+			current_view;
+
+		var circle = g.selectAll("circle")
+			.data(nodes)
+			.enter()
+			.append("circle")
+			.attr("class", function(d) { return d.parent ? d.children ? "node" :
+					"node node--leaf" : "node node--root"; })
+			.style("fill", function(d) { return d.children ? color(d.depth) : null; })
+			.on("click", function(d) {
+				if (focus != d) {
+					svg5.selectAll("#title").style("opacity", 0);
+					zoom(d);
+					d3.event.stopPropagation();
+				}
+			});
+
+		g.selectAll("circle")
+			.filter(function(d) { return !d.children; })
+			.append("svg:title")
+				.text(function (d) {
+					var idx = d.data.name.indexOf("#");
+					var council = Number(d.data.name.substring(idx+1)) - 1;
+
+					return "Solved Cases: " + d.data.total +
+						"\nTotal Reported Cases in this Council: " +
+						crime_counts[d.parent.parent.data.name][council];
+				});
+
+			
+		var text = g.selectAll("text")
+			.data(nodes)
+			.enter()
+			.append("text")
+			.attr("id", "packing")
+			.attr("class", "label")
+			.style("fill-opacity", function(d) { return d.parent === root ? 1 : 0; })
+			.style("display", function(d) { return d.parent === root ? "inline" : "none"; })
+			.text(function(d) {
+				return d.data.name;
+		});
+
+		var node = g.selectAll("circle, text");
+
+		svg5.on("click", function() { 
+			zoom(root);
+			svg5.selectAll("#title").style("opacity", 1);
+		});
+
+		zoomTo([root.x, root.y, root.r * 2]);
+
+		svg5.append("text")
+			.attr("x", 0)             
+			.attr("y", 12)
+			.attr("id", "title")
+			.style("fill", "grey")
+			.style("font-size", "16px")
+			.style("text-decoration", "underline")
+			.text("Hierarchial Packing of Crimes Solved");
+
+		svg5.append("text")
+			.attr("x", width - 230)
+			.attr("y", 12)
+			.attr("id", "title")
+			.style("fill", "grey")
+			.style("font-size", "16px")
+			.style("text-decoration", "underline")
+			.text("per Crime Type per Council");
+
+
+		function zoom(d) {
+			current_focus = d;
+
+			var transition = d3.transition()
+				.duration(750)
+				.tween("zoom", function(d) {
+					var i = d3.interpolateZoom(current_view, [current_focus.x,
+							current_focus.y, current_focus.r * 2]);
+					return function(t) { zoomTo(i(t)); };
+				});
+
+			transition.selectAll("#packing")
+				.filter(function(d) { return d.parent === current_focus ||
+					this.style.display === "inline"; })
+				.style("fill-opacity", function(d) { return d.parent === current_focus ? 1 : 0; })
+				.on("start", function(d) {
+					if (d.parent === current_focus) {
+						this.style.display = "inline";
+					}
+				})
+			.on("end", function(d) {
+				if (d.parent !== current_focus) {
+					this.style.display = "none";
+				}
+			});
+		}
+
+		function zoomTo(new_view) {
+			var scale = diameter / new_view[2];
+			current_view = new_view;
+			node.attr("transform", function(d) { return "translate(" +
+					(d.x - new_view[0]) * scale + "," + (d.y - new_view[1]) * scale + ")"; });
+			circle.attr("r", function(d) { return d.r * scale; });
+		}
+	}
+}
+</script>
+</body>
